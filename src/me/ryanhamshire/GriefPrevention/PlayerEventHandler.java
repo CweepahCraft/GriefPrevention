@@ -147,26 +147,15 @@ class PlayerEventHandler implements Listener
 		    //limit recipients to sender
 		    recipients.clear();
             recipients.add(player);
-		    
-		    //if player not new warn for the first infraction per play session.
-            if(!GriefPrevention.isNewToServer(player))
-            {
-                PlayerData playerData = GriefPrevention.instance.dataStore.getPlayerData(player.getUniqueId());
-                if(!playerData.profanityWarned)
-                {
-                    playerData.profanityWarned = true;
-                    GriefPrevention.sendMessage(player, TextMode.Err, Messages.NoProfanity);
-                    event.setCancelled(true);
-                    return;
-                }
-            }
-            
-            //otherwise assume chat troll and mute all chat from this sender until an admin says otherwise
-            else if(GriefPrevention.instance.config_trollFilterEnabled)
-            {
-                GriefPrevention.AddLogEntry("Auto-muted new player " + player.getName() + " for profanity shortly after join.  Use /SoftMute to undo.", CustomLogEntryTypes.AdminActivity);
-                GriefPrevention.instance.dataStore.toggleSoftMute(player.getUniqueId());
-            }
+
+			PlayerData playerData = GriefPrevention.instance.dataStore.getPlayerData(player.getUniqueId());
+			if(!playerData.profanityWarned)
+			{
+				playerData.profanityWarned = true;
+				GriefPrevention.sendMessage(player, TextMode.Err, Messages.NoProfanity);
+				event.setCancelled(true);
+				return;
+			}
         }
 		
 		//remaining messages
