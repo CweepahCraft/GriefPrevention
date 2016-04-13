@@ -1338,7 +1338,7 @@ class PlayerEventHandler implements Listener
             Claim claim = this.dataStore.getClaimAt(entity.getLocation(), false, null);
             if(claim != null)
             {
-                if(claim.allowContainers(player) != null)
+                if(claim.allowContainers(player) != null && !(claim.allowAccess(player) == null && (entity.getType() == EntityType.COW || entity.getType() == EntityType.MUSHROOM_COW)))
                 {
                     String message = GriefPrevention.instance.dataStore.getMessage(Messages.NoDamageClaimedEntity, claim.getOwnerName());
                     if(player.hasPermission("griefprevention.ignoreclaims"))
