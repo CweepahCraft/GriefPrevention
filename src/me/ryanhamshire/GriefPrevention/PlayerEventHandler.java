@@ -164,7 +164,9 @@ class PlayerEventHandler implements Listener
             //otherwise assume chat troll and mute all chat from this sender until an admin says otherwise
             else if(GriefPrevention.instance.config_trollFilterEnabled)
             {
+            	String notificationMessage = "(Auto-Muted " + player.getName() + "): " + message;
                 GriefPrevention.AddLogEntry("Auto-muted new player " + player.getName() + " for profanity shortly after join.  Use /SoftMute to undo.", CustomLogEntryTypes.AdminActivity);
+                GriefPrevention.AddLogEntry(notificationMessage, CustomLogEntryTypes.MutedChat, false);
                 GriefPrevention.instance.dataStore.toggleSoftMute(player.getUniqueId());
             }
         }
@@ -1105,7 +1107,7 @@ class PlayerEventHandler implements Listener
         {
             //FEATURE: when players get trapped in a nether portal, send them back through to the other side
             CheckForPortalTrapTask task = new CheckForPortalTrapTask(player, event.getFrom());
-            GriefPrevention.instance.getServer().getScheduler().scheduleSyncDelayedTask(GriefPrevention.instance, task, 1200L);  //after 1 minute
+            GriefPrevention.instance.getServer().getScheduler().scheduleSyncDelayedTask(GriefPrevention.instance, task, 600L);  //after 30 seconds
             portalReturnMap.put(player.getUniqueId(), event.getFrom());
         
             //FEATURE: if the player teleporting doesn't have permission to build a nether portal and none already exists at the destination, cancel the teleportation
@@ -1376,6 +1378,33 @@ class PlayerEventHandler implements Listener
                 }
             }
 		}
+	}
+	
+	//when a player reels in his fishing rod
+	@EventHandler(ignoreCancelled = true, priority = EventPriority.LOWEST)
+	public void onPlayerFish(PlayerFishEvent event)
+	{
+	    Entity entity = event.getCaught();
+	    if(entity == null) return;  //if nothing pulled, uninteresting event
+	    
+	    //if should be protected from pulling in land claims without permission
+	    if(entity.getType() == EntityType.ARMOR_STAND || entity instanceof Animals)
+	    {
+	        Player player = event.getPlayer();
+	        PlayerData playerData = GriefPrevention.instance.dataStore.getPlayerData(player.getUniqueId());
+	        Claim claim = GriefPrevention.instance.dataStore.getClaimAt(entity.getLocation(), false, playerData.lastClaim);
+	        if(claim != null)
+	        {
+	            //if no permission, cancel
+	            String errorMessage = claim.allowContainers(player);
+	            if(errorMessage != null)
+	            {
+	                event.setCancelled(true);
+	                GriefPrevention.sendMessage(player, TextMode.Err, Messages.NoDamageClaimedEntity, claim.getOwnerName());
+	                return;
+	            }
+	        }
+	    }
 	}
 	
 	//when a player picks up an item...
