@@ -76,10 +76,12 @@ public class EntityEventHandler implements Listener
 {
 	//convenience reference for the singleton datastore
 	private DataStore dataStore;
+	GriefPrevention instance;
 	
-	public EntityEventHandler(DataStore dataStore)
+	public EntityEventHandler(DataStore dataStore, GriefPrevention plugin)
 	{
 		this.dataStore = dataStore;
+		instance = plugin;
 	}
 	
 	@EventHandler(ignoreCancelled = true, priority = EventPriority.LOWEST)
@@ -154,9 +156,8 @@ public class EntityEventHandler implements Listener
 		    else
 		    {
 		         List<MetadataValue> values = entity.getMetadata("GP_FALLINGBLOCK");
-				 //If entity fell through an end portal, allow it to form, as the event is erroneously fired twice in this scenario.
-				 if (entity.hasMetadata("GP_FELLTHROUGHPORTAL")) return;
 		         //if we're not sure where this entity came from (maybe another plugin didn't follow the standard?), allow the block to form
+				 //Or if entity fell through an end portal, allow it to form, as the event is erroneously fired twice in this scenario.
 		         if(values.size() < 1) return;
 		         
 		         Location originalLocation = (Location)(values.get(0).value());
@@ -194,7 +195,7 @@ public class EntityEventHandler implements Listener
 	{
 		if (event.getEntityType() != EntityType.FALLING_BLOCK)
 			return;
-		event.getEntity().setMetadata("GP_FELLTHROUGHPORTAL", new FixedMetadataValue(GriefPrevention.instance, true));
+		event.getEntity().removeMetadata("GP_FALLINGBLOCK", instance);
 	}
 	
 	//don't allow zombies to break down doors
@@ -249,7 +250,7 @@ public class EntityEventHandler implements Listener
         if(!GriefPrevention.instance.claimsEnabledForWorld(world)) return;
         
         //FEATURE: explosions don't destroy surface blocks by default
-        boolean isCreeper = (entity != null && entity instanceof Creeper);
+        boolean isCreeper = (entity != null && entity.getType() == EntityType.CREEPER);
         
         boolean applySurfaceRules = world.getEnvironment() == Environment.NORMAL && ((isCreeper && GriefPrevention.instance.config_blockSurfaceCreeperExplosions) || (!isCreeper && GriefPrevention.instance.config_blockSurfaceOtherExplosions));
         
@@ -440,7 +441,7 @@ public class EntityEventHandler implements Listener
 		//FEATURE: when a player is involved in a siege (attacker or defender role)
 		//his death will end the siege
 		
-		if(!(entity instanceof Player)) return;  //only tracking players
+		if(entity.getType() != EntityType.PLAYER) return;  //only tracking players
 		
 		Player player = (Player)entity;
 		PlayerData playerData = this.dataStore.getPlayerData(player.getUniqueId());
@@ -491,7 +492,7 @@ public class EntityEventHandler implements Listener
 		//FEATURE: endermen don't steal claimed blocks
 		
 		//if its an enderman
-		if(event.getEntity() instanceof Enderman)
+		if(event.getEntity().getType() == EntityType.ENDERMAN)
 		{
 			//and the block is claimed
 			if(this.dataStore.getClaimAt(event.getBlock().getLocation(), false, null) != null)
@@ -531,7 +532,7 @@ public class EntityEventHandler implements Listener
 		Entity remover = entityEvent.getRemover();
         
 		//again, making sure the breaker is a player
-		if(!(remover instanceof Player))
+		if(remover.getType() != EntityType.PLAYER)
         {
         	event.setCancelled(true);
         	return;
@@ -669,7 +670,7 @@ public class EntityEventHandler implements Listener
         
         if(damageSource != null)
         {
-            if(damageSource instanceof Player)
+            if(damageSource.getType() == EntityType.PLAYER)
             {
                 attacker = (Player)damageSource;
             }
@@ -718,7 +719,7 @@ public class EntityEventHandler implements Listener
         }
         
         //if the attacker is a player and defender is a player (pvp combat)
-        if(attacker != null && event.getEntity() instanceof Player && GriefPrevention.instance.pvpRulesApply(attacker.getWorld()))
+        if(attacker != null && event.getEntityType() == EntityType.PLAYER && GriefPrevention.instance.pvpRulesApply(attacker.getWorld()))
         {
             //FEATURE: prevent pvp in the first minute after spawn, and prevent pvp when one or both players have no inventory
             
@@ -862,7 +863,7 @@ public class EntityEventHandler implements Listener
                     if(attacker == null)
                     {
                         //exception case
-                        if(event.getEntity() instanceof Villager && damageSource != null && damageSource instanceof Zombie)
+                        if(event.getEntityType() == EntityType.VILLAGER && damageSource != null && damageSource.getType() == EntityType.ZOMBIE)
                         {
                             return;
                         }
@@ -965,7 +966,7 @@ public class EntityEventHandler implements Listener
                     if(attacker == null)
                     {
                         //exception case
-                        if(event.getEntity() instanceof Villager && damageSource != null && damageSource instanceof Zombie)
+                        if(event.getEntityType() == EntityType.VILLAGER && damageSource != null && damageSource.getType() == EntityType.ZOMBIE)
                         {
                             return;
                         }
@@ -1042,7 +1043,7 @@ public class EntityEventHandler implements Listener
         
         if(damageSource != null)
         {
-            if(damageSource instanceof Player)
+            if(damageSource.getType() == EntityType.PLAYER)
             {
                 attacker = (Player)damageSource;
             }
@@ -1208,7 +1209,7 @@ public class EntityEventHandler implements Listener
 	            if(effected == thrower) continue;
 	            
 	            //always impact non players
-	            if(!(effected instanceof Player)) continue;
+	            if(effected.getType() != EntityType.PLAYER) continue;
 	            
 	            //otherwise if in no-pvp zone, stop effect
 	            //FEATURE: prevent players from engaging in PvP combat inside land claims (when it's disabled)

@@ -83,9 +83,6 @@ public class PlayerData
 	
 	//whether the player was kicked (set and used during logout)
 	boolean wasKicked = false;
-	
-	//spam
-	private Date lastLogin = null;					//when the player last logged into the server
     
 	//visualization
 	public Visualization currentVisualization = null;
@@ -130,9 +127,6 @@ public class PlayerData
 	//spot where a player can't talk, used to mute new players until they've moved a little
 	//this is an anti-bot strategy.
 	Location noChatLocation = null;
-	
-	//last sign message, to prevent sign spam
-	String lastSignMessage = null;
 	
 	//ignore list
 	//true means invisible (admin-forced ignore), false means player-created ignore
@@ -219,40 +213,11 @@ public class PlayerData
     {
         this.bonusClaimBlocks = bonusClaimBlocks;
     }
-
-    public Date getLastLogin()
-    {
-        if(this.lastLogin == null) this.loadDataFromSecondaryStorage();
-        return this.lastLogin;
-    }
-    
-    public void setLastLogin(Date lastLogin)
-    {
-        this.lastLogin = lastLogin;
-    }
     
     private void loadDataFromSecondaryStorage()
     {
         //reach out to secondary storage to get any data there
         PlayerData storageData = GriefPrevention.instance.dataStore.getPlayerDataFromStorage(this.playerID);
-        
-        //fill in any missing pieces
-        if(this.lastLogin == null)
-        {
-            if(storageData.lastLogin != null)
-            {
-                this.lastLogin = storageData.lastLogin;
-            }
-            else
-            {
-                //default last login date value to 5 minutes ago to ensure a brand new player can log in
-                //see login cooldown feature, PlayerEventHandler.onPlayerLogin()
-                //if the player successfully logs in, this value will be overwritten with the current date and time 
-                Calendar fiveMinutesBack = Calendar.getInstance();
-                fiveMinutesBack.add(Calendar.MINUTE, -5);
-                this.lastLogin = fiveMinutesBack.getTime();
-            }
-        }
         
         if(this.accruedClaimBlocks == null)
         {

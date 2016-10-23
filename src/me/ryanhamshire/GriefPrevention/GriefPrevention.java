@@ -63,6 +63,8 @@ import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.RegisteredServiceProvider;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.scheduler.BukkitRunnable;
+import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.util.BlockIterator;
 
 public class GriefPrevention extends JavaPlugin
@@ -71,7 +73,7 @@ public class GriefPrevention extends JavaPlugin
 	public static GriefPrevention instance;
 	
 	//for logging to the console and log file
-	private static Logger log = Logger.getLogger("Minecraft");
+	private static Logger log;
 	
 	//this handles data storage, like player and region data
 	public DataStore dataStore;
@@ -229,7 +231,7 @@ public class GriefPrevention extends JavaPlugin
 		{
 		    GriefPrevention.instance.customLogger.AddEntry(entry, customLogType);
 		}
-	    if(!excludeFromServerLogs) log.info("GriefPrevention: " + entry);
+	    if(!excludeFromServerLogs) log.info(entry);
 	}
 	
 	public static synchronized void AddLogEntry(String entry, CustomLogEntryTypes customLogType)
@@ -246,8 +248,7 @@ public class GriefPrevention extends JavaPlugin
 	public void onEnable()
 	{ 		
 	    instance = this;
-        
-        AddLogEntry("Grief Prevention boot start.");
+		log = instance.getLogger();
 		
 		this.loadConfig();
 		
@@ -279,6 +280,7 @@ public class GriefPrevention extends JavaPlugin
 			{
 				GriefPrevention.AddLogEntry("Because there was a problem with the database, GriefPrevention will not function properly.  Either update the database config settings resolve the issue, or delete those lines from your config.yml so that GriefPrevention can use the file system to store data.");
 				e.printStackTrace();
+				this.getServer().getPluginManager().disablePlugin(this);
 				return;
 			}			
 		}
@@ -340,7 +342,7 @@ public class GriefPrevention extends JavaPlugin
 		pluginManager.registerEvents(blockEventHandler, this);
 				
 		//entity events
-		EntityEventHandler entityEventHandler = new EntityEventHandler(this.dataStore);
+		EntityEventHandler entityEventHandler = new EntityEventHandler(this.dataStore, this);
 		pluginManager.registerEvents(entityEventHandler, this);
 		
 		//if economy is enabled
@@ -763,12 +765,25 @@ public class GriefPrevention extends JavaPlugin
         this.config_logs_mutedChatEnabled = config.getBoolean("GriefPrevention.Abridged Logs.Included Entry Types.Muted Chat Messages", false);
         
         //claims mode by world
-        for(World world : this.config_claims_worldModes.keySet())
-        {
-            outConfig.set(
-                "GriefPrevention.Claims.Mode." + world.getName(), 
-                this.config_claims_worldModes.get(world).name());
-        }
+		try
+		{
+			for(World world : this.config_claims_worldModes.keySet())
+			{
+				outConfig.set(
+						"GriefPrevention.Claims.Mode." + world.getName(),
+						this.config_claims_worldModes.get(world).name());
+			}
+		}
+		catch(NoSuchMethodError e)
+		{
+			this.getLogger().severe("You are running an old version of Java which is susceptible to security exploits. Please update to Java 8.");
+			this.getLogger().severe("If you are on a shared host, tell your hosting provider to update, as Java 7 is End of Life, and you're missing out on security and performance improvements");
+			this.getLogger().severe("If they refuse, I'd suggesting switching to a more secure and responsive host.");
+			this.getLogger().severe("But if you truly have absolutely no choice, then please download the Java 7 version of GriefPrevention.");
+			getServer().getPluginManager().disablePlugin(this);
+			return;
+		}
+
         
         outConfig.set("GriefPrevention.Claims.PreventTheft", this.config_claims_preventTheft);
         outConfig.set("GriefPrevention.Claims.ProtectCreatures", this.config_claims_protectCreatures);
@@ -964,7 +979,7 @@ public class GriefPrevention extends JavaPlugin
     public boolean onCommand(CommandSender sender, Command cmd, String commandLabel, String[] args){
 		
 		Player player = null;
-		if (sender instanceof Player) 
+		if (sender instanceof Player)
 		{
 			player = (Player) sender;
 		}
@@ -1886,7 +1901,7 @@ public class GriefPrevention extends JavaPlugin
 						this.dataStore.deleteClaim(claim, true, true);
 						
 						//if in a creative mode world, /restorenature the claim
-						if(GriefPrevention.instance.creativeRulesApply(claim.getLesserBoundaryCorner()))
+						if(GriefPrevention.instance.creativeRulesApply(claim.getLesserBoundaryCorner()) || GriefPrevention.instance.config_claims_survivalAutoNatureRestoration)
 						{
 							GriefPrevention.instance.restoreClaim(claim, 0);
 						}
@@ -2728,7 +2743,6 @@ public class GriefPrevention extends JavaPlugin
             
             return true;
         }
-		
 		return false; 
 	}
 	
@@ -3591,4 +3605,74 @@ public class GriefPrevention extends JavaPlugin
                 claim.isAdminClaim() && claim.parent != null && GriefPrevention.instance.config_pvp_noCombatInAdminSubdivisions ||
                !claim.isAdminClaim() && GriefPrevention.instance.config_pvp_noCombatInPlayerLandClaims;
     }
+
+    /*
+    protected boolean isPlayerTrappedInPortal(Block block)
+	{
+		Material playerBlock = block.getType();
+		if (playerBlock == Material.PORTAL)
+			return true;
+		//Most blocks you can "stand" inside but cannot pass through (isSolid) usually can be seen through (!isOccluding)
+		//This can cause players to technically be considered not in a portal block, yet in reality is still stuck in the portal animation.
+		if ((!playerBlock.isSolid() || playerBlock.isOccluding())) //If it is _not_ such a block,
+		{
+			//Check the block above
+			playerBlock = block.getRelative(BlockFace.UP).getType();
+			if ((!playerBlock.isSolid() || playerBlock.isOccluding()))
+				return false; //player is not stuck
+		}
+		//Check if this block is also adjacent to a portal
+		return block.getRelative(BlockFace.EAST).getType() == Material.PORTAL
+				|| block.getRelative(BlockFace.WEST).getType() == Material.PORTAL
+				|| block.getRelative(BlockFace.NORTH).getType() == Material.PORTAL
+				|| block.getRelative(BlockFace.SOUTH).getType() == Material.PORTAL;
+	}
+
+	public void rescuePlayerTrappedInPortal(final Player player)
+	{
+		final Location oldLocation = player.getLocation();
+		if (!isPlayerTrappedInPortal(oldLocation.getBlock()))
+		{
+			//Note that he 'escaped' the portal frame
+			instance.portalReturnMap.remove(player.getUniqueId());
+			instance.portalReturnTaskMap.remove(player.getUniqueId());
+			return;
+		}
+
+		Location rescueLocation = portalReturnMap.get(player.getUniqueId());
+
+		if (rescueLocation == null)
+			return;
+
+		//Temporarily store the old location, in case the player wishes to undo the rescue
+		dataStore.getPlayerData(player.getUniqueId()).portalTrappedLocation = oldLocation;
+
+		player.teleport(rescueLocation);
+		sendMessage(player, TextMode.Info, Messages.RescuedFromPortalTrap);
+		portalReturnMap.remove(player.getUniqueId());
+
+		new BukkitRunnable()
+		{
+			public void run()
+			{
+				if (oldLocation == dataStore.getPlayerData(player.getUniqueId()).portalTrappedLocation)
+					dataStore.getPlayerData(player.getUniqueId()).portalTrappedLocation = null;
+			}
+		}.runTaskLater(this, 600L);
+	}
+	*/
+
+	//Track scheduled "rescues" so we can cancel them if the player happens to teleport elsewhere so we can cancel it.
+	ConcurrentHashMap<UUID, BukkitTask> portalReturnTaskMap = new ConcurrentHashMap<UUID, BukkitTask>();
+	public void startRescueTask(Player player)
+	{
+		//Schedule task to reset player's portal cooldown after 20 seconds
+		BukkitTask task = new CheckForPortalTrapTask(player, this).runTaskLater(GriefPrevention.instance, 400L);
+
+		//Cancel existing rescue task
+		if (portalReturnTaskMap.containsKey(player.getUniqueId()))
+			portalReturnTaskMap.put(player.getUniqueId(), task).cancel();
+		else
+			portalReturnTaskMap.put(player.getUniqueId(), task);
+	}
 }
