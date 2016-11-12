@@ -1389,37 +1389,67 @@ public class GriefPrevention extends JavaPlugin
                 GriefPrevention.sendMessage(player, TextMode.Err, Messages.TransferClaimPermission);
                 return true;
             }
-			
-			UUID newOwnerID = null;  //no argument = make an admin claim
-			String ownerName = "admin";
+
+            final String format = "%s transferred a claim at %s to %s.";
 			
 			if(args.length > 0)
 			{
-    			OfflinePlayer targetPlayer = this.resolvePlayerByName(args[0]);
-    			if(targetPlayer == null)
-    			{
-    				GriefPrevention.sendMessage(player, TextMode.Err, Messages.PlayerNotFound2);
-    				return true;
-    			}
-    			newOwnerID = targetPlayer.getUniqueId();
-    			ownerName = targetPlayer.getName();
+				// Final variables for use within anonymous classes.
+				final Player fPlayer = player;
+				final DataStore fDataStore = this.dataStore;
+				final Claim fClaim = claim;
+
+				this.resolvePlayerByName(args[0], new UUIDResolveRunnable()
+				{
+					@Override
+					public void run()
+					{
+						try
+						{
+							fDataStore.changeClaimOwner(fClaim, this.player.getUniqueId());
+							//confirm
+							GriefPrevention.sendMessage(fPlayer, TextMode.Success, Messages.TransferSuccess);
+							GriefPrevention.AddLogEntry(String.format(format,
+									fPlayer.getName(),
+									GriefPrevention.getfriendlyLocationString(fClaim.getLesserBoundaryCorner()),
+									this.player.getName()
+							), CustomLogEntryTypes.AdminActivity);
+						}
+						catch (NoTransferException e)
+						{
+							GriefPrevention.sendMessage(fPlayer, TextMode.Instr, Messages.TransferTopLevel);
+						}
+					}
+				}, new Runnable()
+				{
+					@Override
+					public void run()
+					{
+						GriefPrevention.sendMessage(fPlayer, TextMode.Err, Messages.PlayerNotFound2);
+					}
+				});
 			}
-			
-			//change ownerhsip
-			try
+			else
 			{
-				this.dataStore.changeClaimOwner(claim, newOwnerID);
+				//change ownerhsip
+				try
+				{
+					this.dataStore.changeClaimOwner(claim, null);
+					//confirm
+					GriefPrevention.sendMessage(player, TextMode.Success, Messages.TransferSuccess);
+					GriefPrevention.AddLogEntry(String.format(format,
+							player.getName(),
+							GriefPrevention.getfriendlyLocationString(claim.getLesserBoundaryCorner()),
+							"admin"
+					), CustomLogEntryTypes.AdminActivity);
+				}
+				catch (NoTransferException e)
+				{
+					GriefPrevention.sendMessage(player, TextMode.Instr, Messages.TransferTopLevel);
+					return true;
+				}
 			}
-			catch(NoTransferException e)
-			{
-			    GriefPrevention.sendMessage(player, TextMode.Instr, Messages.TransferTopLevel);
-    			return true;
-			}
-			
-			//confirm
-			GriefPrevention.sendMessage(player, TextMode.Success, Messages.TransferSuccess);
-			GriefPrevention.AddLogEntry(player.getName() + " transferred a claim at " + GriefPrevention.getfriendlyLocationString(claim.getLesserBoundaryCorner()) + " to " + ownerName + ".", CustomLogEntryTypes.AdminActivity);
-			
+
 			return true;
 		}
 		
@@ -3061,7 +3091,7 @@ public class GriefPrevention extends JavaPlugin
     }
 	
 	@SuppressWarnings("deprecation")
-    public OfflinePlayer resolvePlayerByName(String name) 
+    public OfflinePlayer resolvePlayerByName(String name)
 	{
 		//try online players first
 		Player targetPlayer = this.getServer().getPlayerExact(name);
@@ -3086,6 +3116,40 @@ public class GriefPrevention extends JavaPlugin
         }
 
 		return this.getServer().getOfflinePlayer(bestMatchID);
+	}
+
+	private void resolvePlayerByName(final String name, final UUIDResolveRunnable onSuccess, final Runnable onFail)
+	{
+		new BukkitRunnable()
+		{
+			@Override
+			public void run()
+			{
+				final OfflinePlayer player = Bukkit.getOfflinePlayer(name);
+				if (player.hasPlayedBefore())
+				{
+					onSuccess.setPlayer(player);
+					Bukkit.getScheduler().runTask(GriefPrevention.instance, onSuccess);
+				}
+				else
+				{
+					Bukkit.getScheduler().runTask(GriefPrevention.instance, onFail);
+				}
+			}
+		}.runTaskAsynchronously(this);
+	}
+
+	private abstract class UUIDResolveRunnable implements Runnable
+	{
+		protected OfflinePlayer player;
+
+		@Override
+		public abstract void run();
+
+		public void setPlayer(OfflinePlayer player)
+		{
+			this.player = player;
+		}
 	}
 
 	//helper method to resolve a player name from the player's UUID
