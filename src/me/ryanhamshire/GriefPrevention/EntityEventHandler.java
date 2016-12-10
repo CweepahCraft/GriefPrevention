@@ -937,12 +937,14 @@ public class EntityEventHandler implements Listener
                 PlayerData playerData = null;
                 
                 //if not a player or an explosive, allow
+				//RoboMWM: Or a lingering potion, or a witch
                 if(attacker == null
                         && damageSource != null
                         && damageSource.getType() != EntityType.CREEPER
                         && damageSource.getType() != EntityType.WITHER
                         && damageSource.getType() != EntityType.ENDER_CRYSTAL
                         && damageSource.getType() != EntityType.AREA_EFFECT_CLOUD
+						&& damageSource.getType() != EntityType.WITCH
                         && !(damageSource instanceof Projectile)
                         && !(damageSource instanceof Explosive)
                         && !(damageSource instanceof ExplosiveMinecart))
@@ -963,10 +965,11 @@ public class EntityEventHandler implements Listener
                 {
                     //if damaged by anything other than a player (exception villagers injured by zombies in admin claims), cancel the event
                     //why exception?  so admins can set up a village which can't be CHANGED by players, but must be "protected" by players.
+					//TODO: Discuss if this should only apply to admin claims...?
                     if(attacker == null)
                     {
                         //exception case
-                        if(event.getEntityType() == EntityType.VILLAGER && damageSource != null && damageSource.getType() == EntityType.ZOMBIE)
+                        if(event.getEntityType() == EntityType.VILLAGER && damageSource != null && (damageSource.getType() == EntityType.ZOMBIE || damageSource.getType() == EntityType.VINDICATOR || damageSource.getType() == EntityType.EVOKER || damageSource.getType() == EntityType.EVOKER_FANGS || damageSource.getType() == EntityType.VEX))
                         {
                             return;
                         }
@@ -1169,37 +1172,42 @@ public class EntityEventHandler implements Listener
 	    
 	    //ignore potions not thrown by players
 	    ProjectileSource projectileSource = potion.getShooter();
-        if(projectileSource == null || !(projectileSource instanceof Player)) return;
-        Player thrower = (Player)projectileSource;
+        if(projectileSource == null) return;
+        Player thrower = null;
+		if ((projectileSource instanceof Player))
+				thrower = (Player)projectileSource;
         
 	    Collection<PotionEffect> effects = potion.getEffects();
 	    for(PotionEffect effect : effects)
 	    {
 	        PotionEffectType effectType = effect.getType();
 
-	        //restrict some potions on claimed animals (griefers could use this to kill or steal animals over fences)
+	        //restrict some potions on claimed animals (griefers could use this to kill or steal animals over fences) //RoboMWM: include villagers
 	        if(effectType.getName().equals("JUMP") || effectType.getName().equals("POISON"))
 	        {
-	            for(LivingEntity effected : event.getAffectedEntities())
+				Claim cachedClaim = null;
+				for(LivingEntity effected : event.getAffectedEntities())
 	            {
-	                Claim cachedClaim = null; 
-	                if(effected instanceof Animals)
+	                if(effected.getType() == EntityType.VILLAGER || effected instanceof Animals)
 	                {
 	                    Claim claim = this.dataStore.getClaimAt(effected.getLocation(), false, cachedClaim);
 	                      if(claim != null)
 	                      {
 	                          cachedClaim = claim;
-	                          if(claim.allowContainers(thrower) != null)
+	                          if(thrower == null || claim.allowContainers(thrower) != null)
 	                          {
-	                              event.setCancelled(true);
-	                              GriefPrevention.sendMessage(thrower, TextMode.Err, Messages.NoDamageClaimedEntity, claim.getOwnerName());
+								  event.setIntensity(effected, 0);
+	                              instance.sendMessage(thrower, TextMode.Err, Messages.NoDamageClaimedEntity, claim.getOwnerName());
 	                              return;
 	                          }
 	                      }
 	                }
 	            }
 	        }
-	        
+
+			//Otherwise, ignore potions not thrown by players
+			if (thrower == null) return;
+
 	        //otherwise, no restrictions for positive effects
             if(positiveEffects.contains(effectType)) continue;
 	        
