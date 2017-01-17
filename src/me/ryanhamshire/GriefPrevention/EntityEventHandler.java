@@ -429,7 +429,8 @@ public class EntityEventHandler implements Listener
 		LivingEntity entity = event.getEntity();
 		
 		//don't do the rest in worlds where claims are not enabled
-        if(!GriefPrevention.instance.claimsEnabledForWorld(entity.getWorld())) return;
+		// CweepahCraft - I actually want this to work in every world, even if claims are disabled.
+        //if(!GriefPrevention.instance.claimsEnabledForWorld(entity.getWorld())) return;
 		
 		//special rule for creative worlds: killed entities don't drop items or experience orbs
 		if(GriefPrevention.instance.creativeRulesApply(entity.getLocation()))
