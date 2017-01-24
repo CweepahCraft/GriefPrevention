@@ -558,9 +558,9 @@ public abstract class DataStore
 	synchronized void deleteClaim(Claim claim, boolean fireEvent, boolean releasePets)
 	{
 	    //delete any children
-        for(int j = 0; j < claim.children.size(); j++)
+        for(int j = 1; (j - 1) < claim.children.size(); j++)
         {
-            this.deleteClaim(claim.children.get(j--), true);
+            this.deleteClaim(claim.children.get(j-1), true);
         }
         
 	    //subdivisions must also be removed from the parent claim child list
@@ -1159,13 +1159,13 @@ public abstract class DataStore
 			if((playerID == claim.ownerID || (playerID != null && playerID.equals(claim.ownerID))))
 				claimsToDelete.add(claim);
 		}
-		
+
 		//delete them one by one
 		for(int i = 0; i < claimsToDelete.size(); i++)
 		{
 			Claim claim = claimsToDelete.get(i); 
 			claim.removeSurfaceFluids(null);
-			
+
 			this.deleteClaim(claim, releasePets);
 			
 			//if in a creative mode world, delete the claim
@@ -1686,10 +1686,13 @@ public abstract class DataStore
 			message = message.replace("{" + i + "}", param);
 		}
 
-		DeniedMessageEvent event = new DeniedMessageEvent(messageID, message);
-		Bukkit.getPluginManager().callEvent(event);
-		
-		return event.getMessage();
+		if (Bukkit.isPrimaryThread())
+        {
+            DeniedMessageEvent event = new DeniedMessageEvent(messageID, message);
+            Bukkit.getPluginManager().callEvent(event);
+            return event.getMessage();
+        }
+		return message;
 	}
 	
 	//used in updating the data schema from 0 to 1.
