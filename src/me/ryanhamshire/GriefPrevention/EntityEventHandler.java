@@ -598,14 +598,13 @@ public class EntityEventHandler implements Listener
 		}
 	}
 	
-	private boolean isMonster(Entity entity)
+	private boolean isUnprotected(Entity entity)
     {
-		if(entity instanceof Giant) return false;
+        if(entity instanceof Monster && !(entity instanceof Giant)) return true;
 
-        if(entity instanceof Monster) return true;
-        
         EntityType type = entity.getType();
-        if(type == EntityType.GHAST || type == EntityType.MAGMA_CUBE || type == EntityType.SHULKER || type == EntityType.POLAR_BEAR) return true;
+        if(type == EntityType.GHAST || type == EntityType.MAGMA_CUBE || type == EntityType.SHULKER
+				|| (type == EntityType.POLAR_BEAR && ((Creature) entity).getTarget() != null)) return true;
         
         if(type == EntityType.RABBIT)
         {
@@ -638,7 +637,7 @@ public class EntityEventHandler implements Listener
 	private void handleEntityDamageEvent(EntityDamageEvent event, boolean sendErrorMessagesToPlayers)
 	{
 	    //monsters are never protected
-        if(isMonster(event.getEntity())) return;
+        if(isUnprotected(event.getEntity())) return;
         
         //horse protections can be disabled
         if(event.getEntity() instanceof Horse && !GriefPrevention.instance.config_claims_protectHorses) return;
