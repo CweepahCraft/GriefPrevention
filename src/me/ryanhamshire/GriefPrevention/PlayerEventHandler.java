@@ -1394,43 +1394,72 @@ class PlayerEventHandler implements Listener
 	@EventHandler(ignoreCancelled = true, priority = EventPriority.LOWEST)
 	public void onPlayerBucketEmpty (PlayerBucketEmptyEvent bucketEvent)
 	{
-		if(!instance.claimsEnabledForWorld(bucketEvent.getBlockClicked().getWorld())) return;
-	    
-	    Player player = bucketEvent.getPlayer();
+		Player player = bucketEvent.getPlayer();
 		Block block = bucketEvent.getBlockClicked().getRelative(bucketEvent.getBlockFace());
 		int minLavaDistance = 10;
-		
-		//make sure the player is allowed to build at the location
-		String noBuildReason = instance.allowBuild(player, block.getLocation(), Material.WATER);
-		if(noBuildReason != null)
+
+		if(instance.claimsEnabledForWorld(bucketEvent.getBlockClicked().getWorld()))
 		{
-			instance.sendMessage(player, TextMode.Err, noBuildReason);
-			bucketEvent.setCancelled(true);
-			return;
-		}
-		
-		//if the bucket is being used in a claim, allow for dumping lava closer to other players
-		PlayerData playerData = this.dataStore.getPlayerData(player.getUniqueId());
-		Claim claim = this.dataStore.getClaimAt(block.getLocation(), false, playerData.lastClaim);
-		if(claim != null)
-		{
-			minLavaDistance = 3;
-		}
-		
-		//otherwise no wilderness dumping in creative mode worlds
-		else if(instance.creativeRulesApply(block.getLocation()))
-		{
-			if(block.getY() >= instance.getSeaLevel(block.getWorld()) - 5 && !player.hasPermission("griefprevention.lava"))
+			//make sure the player is allowed to build at the location
+			String noBuildReason = instance.allowBuild(player, block.getLocation(), Material.WATER);
+			if (noBuildReason != null)
 			{
-				if(bucketEvent.getBucket() == Material.LAVA_BUCKET)
+				instance.sendMessage(player, TextMode.Err, noBuildReason);
+				bucketEvent.setCancelled(true);
+				return;
+			}
+
+			//if the bucket is being used in a claim, allow for dumping lava closer to other players
+			PlayerData playerData = this.dataStore.getPlayerData(player.getUniqueId());
+			Claim claim = this.dataStore.getClaimAt(block.getLocation(), false, playerData.lastClaim);
+			if (claim != null)
+			{
+				minLavaDistance = 3;
+			}
+
+			//otherwise no wilderness dumping in creative mode worlds
+			else if (instance.creativeRulesApply(block.getLocation()))
+			{
+				if (block.getY() >= instance.getSeaLevel(block.getWorld()) - 5 && !player.hasPermission("griefprevention.lava"))
 				{
-					instance.sendMessage(player, TextMode.Err, Messages.NoWildernessBuckets);
-					bucketEvent.setCancelled(true);
-					return;
+					if (bucketEvent.getBucket() == Material.LAVA_BUCKET)
+					{
+						instance.sendMessage(player, TextMode.Err, Messages.NoWildernessBuckets);
+						bucketEvent.setCancelled(true);
+						return;
+					}
+				}
+			}
+
+			//log any suspicious placements (check sea level, world type, and adjacent blocks)
+			if(block.getY() >= instance.getSeaLevel(block.getWorld()) - 5 && !player.hasPermission("griefprevention.lava") && block.getWorld().getEnvironment() != Environment.NETHER)
+			{
+				//if certain blocks are nearby, it's less suspicious and not worth logging
+				HashSet<Material> exclusionAdjacentTypes;
+				if(bucketEvent.getBucket() == Material.WATER_BUCKET)
+					exclusionAdjacentTypes = this.commonAdjacentBlocks_water;
+				else
+					exclusionAdjacentTypes = this.commonAdjacentBlocks_lava;
+
+				boolean makeLogEntry = true;
+				BlockFace [] adjacentDirections = new BlockFace[] {BlockFace.EAST, BlockFace.WEST, BlockFace.NORTH, BlockFace.SOUTH, BlockFace.DOWN};
+				for(BlockFace direction : adjacentDirections)
+				{
+					Material adjacentBlockType = block.getRelative(direction).getType();
+					if(exclusionAdjacentTypes.contains(adjacentBlockType))
+					{
+						makeLogEntry = false;
+						break;
+					}
+				}
+
+				if(makeLogEntry)
+				{
+					instance.AddLogEntry(player.getName() + " placed suspicious " + bucketEvent.getBucket().name() + " @ " + instance.getfriendlyLocationString(block.getLocation()), CustomLogEntryTypes.SuspiciousActivity);
 				}
 			}
 		}
-		
+
 		//lava buckets can't be dumped near other players unless pvp is on
 		if((!instance.pvpRulesApply(block.getWorld()) || !instance.config_pvp_allowLavaNearPlayers) && !player.hasPermission("griefprevention.lava"))
 		{
@@ -1446,37 +1475,9 @@ class PlayerEventHandler implements Listener
 						instance.sendMessage(player, TextMode.Err, Messages.NoLavaNearOtherPlayer, "another player");
 						bucketEvent.setCancelled(true);
 						return;
-					}					
+					}
 				}
 			}
-		}
-		
-		//log any suspicious placements (check sea level, world type, and adjacent blocks)
-		if(block.getY() >= instance.getSeaLevel(block.getWorld()) - 5 && !player.hasPermission("griefprevention.lava") && block.getWorld().getEnvironment() != Environment.NETHER)
-		{
-		    //if certain blocks are nearby, it's less suspicious and not worth logging
-		    HashSet<Material> exclusionAdjacentTypes;
-		    if(bucketEvent.getBucket() == Material.WATER_BUCKET)
-		        exclusionAdjacentTypes = this.commonAdjacentBlocks_water;
-		    else
-		        exclusionAdjacentTypes = this.commonAdjacentBlocks_lava;
-		    
-		    boolean makeLogEntry = true;
-		    BlockFace [] adjacentDirections = new BlockFace[] {BlockFace.EAST, BlockFace.WEST, BlockFace.NORTH, BlockFace.SOUTH, BlockFace.DOWN};
-		    for(BlockFace direction : adjacentDirections)
-		    {
-		        Material adjacentBlockType = block.getRelative(direction).getType();
-		        if(exclusionAdjacentTypes.contains(adjacentBlockType))
-	            {
-		            makeLogEntry = false;
-		            break;
-	            }
-		    }
-		    
-		    if(makeLogEntry)
-	        {
-	            instance.AddLogEntry(player.getName() + " placed suspicious " + bucketEvent.getBucket().name() + " @ " + instance.getfriendlyLocationString(block.getLocation()), CustomLogEntryTypes.SuspiciousActivity);
-	        }
 		}
 	}
 	
